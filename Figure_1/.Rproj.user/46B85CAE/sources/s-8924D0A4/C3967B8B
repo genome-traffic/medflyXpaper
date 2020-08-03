@@ -1,0 +1,22 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1587036503068.000,
+    "dirty" : true,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "C3967B8B",
+    "lastKnownWriteTime" : 1587059549,
+    "last_content_update" : 1587061824014,
+    "path" : "~/HUJI Drive/Shared Lab Files/Papers/Angela's Paper/BlastN_2kmers/kmer.R",
+    "project_path" : null,
+    "properties" : {
+        "cursorPosition" : "198,0",
+        "scrollLine" : "186"
+    },
+    "relative_order" : 2,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

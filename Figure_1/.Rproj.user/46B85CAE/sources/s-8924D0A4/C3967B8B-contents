@@ -1,0 +1,253 @@
+library(dplyr)
+library(data.table)
+library(ggplot2)
+library("ggrepel") # for spreading text labels on the plot
+library("scales") # for axis labels notation
+
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+getwd()
+
+EGIIsc_kmers_ws5 <- read.delim("EGIIsc_kmers_ws5.blast", header=FALSE, stringsAsFactors=FALSE)
+scaffold_6 <- read.delim("scaffold_6", header=T, stringsAsFactors=FALSE)
+
+EGIIsc_rnd_fam_cons_ws5 <- read.delim("EGIIsc_rnd_fam_cons_ws5.blast", header=FALSE)
+
+colnames(EGIIsc_rnd_fam_cons_ws5)
+#Rename [1] "V1"  "V2"  "V3"  "V4"  "V5"  "V6"  "V7"  "V8"  "V9"  "V10" "V11" "V12"
+[1] "q.seqid"         "s.seqid"         "p.ident"         "length"          "mis.match"       "gap.open"       
+[7] "q.start"         "q.end"           "s.start"         "s.end"           "e.value"         "bit.score"  
+
+EGIIsc_kmers_ws5<-select(EGIIsc_kmers_ws5, V1, V2, V3, V4, V9, V10)
+EGIIsc_rnd_fam_cons_ws5<-select(EGIIsc_rnd_fam_cons_ws5, V1, V2, V3, V4, V9, V10)
+#K-mers BlastN against the genome EGII
+EGIIsc_kmers_ws5 <- EGIIsc_kmers_ws5 %>% rename (qseqid=V1)
+EGIIsc_kmers_ws5 <- EGIIsc_kmers_ws5 %>% rename (scaffold=V2)
+EGIIsc_kmers_ws5 <- EGIIsc_kmers_ws5 %>% rename (pident=V3)
+EGIIsc_kmers_ws5 <- EGIIsc_kmers_ws5 %>% rename (length=V4)
+EGIIsc_kmers_ws5 <- EGIIsc_kmers_ws5 %>% rename (sstart=V9)
+EGIIsc_kmers_ws5 <- EGIIsc_kmers_ws5 %>% rename (send=V10)
+
+my_data <- EGIIsc_kmers_ws5
+#Four de novo families  BlastN against the genome EGII
+EGIIsc_rnd_fam_cons_ws5 <- EGIIsc_rnd_fam_cons_ws5 %>% rename (qseqid=V1)
+EGIIsc_rnd_fam_cons_ws5 <- EGIIsc_rnd_fam_cons_ws5 %>% rename (scaffold=V2)
+EGIIsc_rnd_fam_cons_ws5 <- EGIIsc_rnd_fam_cons_ws5 %>% rename (pident=V3)
+EGIIsc_rnd_fam_cons_ws5 <- EGIIsc_rnd_fam_cons_ws5 %>% rename (length=V4)
+EGIIsc_rnd_fam_cons_ws5 <- EGIIsc_rnd_fam_cons_ws5 %>% rename (sstart=V9)
+EGIIsc_rnd_fam_cons_ws5 <- EGIIsc_rnd_fam_cons_ws5 %>% rename (send=V10)
+
+my_data_rnd_fam <- EGIIsc_rnd_fam_cons_ws5
+
+##Dataset
+#Select the major scaffolds in Kmers
+sc<-c("scaffold_1","scaffold_2","scaffold_3","scaffold_4","scaffold_5","scaffold_6")
+
+my_data$select<-"no"
+my_data$select[my_data$scaffold=="scaffold_1"]<-"yes"
+my_data$select[my_data$scaffold=="scaffold_2"]<-"yes"
+my_data$select[my_data$scaffold=="scaffold_3"]<-"yes"
+my_data$select[my_data$scaffold=="scaffold_4"]<-"yes"
+my_data$select[my_data$scaffold=="scaffold_5"]<-"yes"
+my_data$select[my_data$scaffold=="scaffold_6"]<-"yes"
+
+#Select the major scaffolds in de novo families
+my_data_rnd_fam$select<-"no"
+my_data_rnd_fam$select[my_data_rnd_fam$scaffold=="scaffold_1"]<-"yes"
+my_data_rnd_fam$select[my_data_rnd_fam$scaffold=="scaffold_2"]<-"yes"
+my_data_rnd_fam$select[my_data_rnd_fam$scaffold=="scaffold_3"]<-"yes"
+my_data_rnd_fam$select[my_data_rnd_fam$scaffold=="scaffold_4"]<-"yes"
+my_data_rnd_fam$select[my_data_rnd_fam$scaffold=="scaffold_5"]<-"yes"
+my_data_rnd_fam$select[my_data_rnd_fam$scaffold=="scaffold_6"]<-"yes"
+
+#Put a easy name in kmers
+my_data$select_kmer[my_data$qseqid=="kmer_343044347.0"]<-"kmer_343044347"
+my_data$select_kmer[my_data$qseqid=="kmer_26033678.0"]<-"kmer_26033678"
+
+#Put a easy name e novo families
+my_data_rnd_fam$select_kmer[my_data_rnd_fam$qseqid=="rnd-1_family-99"]<-"gypsy_99"
+my_data_rnd_fam$select_kmer[my_data_rnd_fam$qseqid=="rnd-6_family-1433"]<-"gypsy_1433"
+my_data_rnd_fam$select_kmer[my_data_rnd_fam$qseqid=="rnd-4_family-524"]<-"gypsy_524"
+my_data_rnd_fam$select_kmer[my_data_rnd_fam$qseqid=="rnd-6_family-6261"]<-"TR_fam"
+
+#Add column for identical sequneces
+my_data_rnd_fam$kmerid[my_data_rnd_fam$pident==100]<-"identical"
+my_data_rnd_fam$kmerid[my_data_rnd_fam$pident<=100]<-"nonidentical"
+
+my_data$kmerid[my_data$pident==100]<-"identical"
+my_data$kmerid[my_data$pident<=100]<-"nonidentical"
+
+
+
+group.colors <- c(kmer_343044347 = "deeppink3",kmer_26033678 = "forestgreen")
+
+#Add label with numbers
+my_data$num2[my_data$select_kmer=="kmer_343044347"]<-1
+my_data$num2[my_data$select_kmer=="kmer_26033678"]<-2
+#Add label with numbers
+my_data_rnd_fam$num2[my_data_rnd_fam$select_kmer=="gypsy_99"]<-3
+my_data_rnd_fam$num2[my_data_rnd_fam$select_kmer=="gypsy_1433"]<-4
+my_data_rnd_fam$num2[my_data_rnd_fam$select_kmer=="gypsy_524"]<-5
+my_data_rnd_fam$num2[my_data_rnd_fam$select_kmer=="TR_fam"]<-6
+
+#Group by TE family
+my_data_rnd_fam$Rep.element[my_data_rnd_fam$num2==3]<-"Gypsy"
+my_data_rnd_fam$Rep.element[my_data_rnd_fam$num2==4]<-"Gypsy"
+my_data_rnd_fam$Rep.element[my_data_rnd_fam$num2==5]<-"Gypsy"
+my_data_rnd_fam$Rep.element[my_data_rnd_fam$num2==6]<-"Tandem"
+
+group.colors2 <- c(gypsy_99 = "deeppink3", gypsy_1433 = "royalblue", TR_fam = "forestgreen", gypsy_524 = "orange")
+
+#Filter by length and identity
+data2<-subset(my_data, my_data$select=="yes")
+data2<-subset(data2, data2$length>24)
+data2<-subset(data2, data2$pident>95)
+
+#Group by sequence origin
+data2$Rep.element[data2$num2==1]<-"K_mer"
+data2$Rep.element[data2$num2==2]<-"K_mer"
+
+#Select only major scaffolds and filter by length and identity
+data3<-subset(my_data_rnd_fam, my_data_rnd_fam$select=="yes")
+data3<-subset(data3, data3$pident>90)
+data4<-subset(data3, data3$pident>95)
+data5<-subset(data4, data4$length>250)
+
+
+
+ggplot()+
+  geom_rect(data=scaffold_6,aes(xmin=0,xmax=end,ymin=0,ymax=3),color="black",fill="white",size=0.4)+
+  geom_jitter(data=data2, aes(x=sstart,y=num2, color=select_kmer),alpha=0.7,size=1.8)+
+  scale_color_manual(values=group.colors7)+
+  facet_grid(scaffold~.)+
+  theme_classic(base_size=15)+
+  theme(axis.title.y=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank(),
+        legend.position="top",
+        panel.spacing.y =unit(.05, "lines"),
+        strip.background = element_rect(size=0.2),
+        strip.text.y = element_text(size=10),
+        axis.line = element_blank())
+
+group.colors7 <- c(kmer_343044347 = "orange",kmer_26033678 = "deeppink3")
+
+#plot  Gypsy families and Tandem
+ggplot()+
+  geom_rect(data=scaffold_6,aes(xmin=0,xmax=end,ymin=0,ymax=7),color="black",fill="white",size=0.4)+
+  geom_jitter(data=subset(data5, data5$select=="yes"), aes(x=sstart,y=num2, color=select_kmer),alpha=0.7,size=0.7)+
+  #geom_point(data=moy_coord, aes(x=g_start, y=3),fill="chocolate4",color="black",size=5,shape=21)+
+  #geom_rect(data=subset(my_data, my_data$select=="yes"), aes(xmin=g_start,xmax=g_end,ymin=5,ymax=10, fill=cqlabel_Fam18))+
+  scale_color_manual(values=group.colors2)+
+  facet_grid(scaffold~.)+
+  theme_bw()
+
+#Merge of Kmers and TEs families files based in ident>95 and length>250
+data6<-rbind(data2, data5)
+#Merge of Kmers and TEs families files based in ident>90
+data7<-rbind(data2, data3)
+
+group.colors3 <- c(gypsy_99 = "royalblue", gypsy_1433 = "deeppink", TR_fam = "forestgreen", gypsy_524 = "brown", kmer_343044347 = "red",kmer_26033678 = "orange")
+
+#plot Kemers and TEs families and Tandem
+ggplot()+
+  geom_rect(data=scaffold_6,aes(xmin=0,xmax=end,ymin=0,ymax=7),color="black",fill="white",size=0.4)+
+  geom_jitter(data=subset(data6, data6$select=="yes"), aes(x=sstart,y=num2, color=Rep.element),alpha=0.8,size=1, na.rm = FALSE)+
+  #geom_point(data=moy_coord, aes(x=g_start, y=3),fill="chocolate4",color="black",size=5,shape=21)+
+  #geom_rect(data=subset(my_data, my_data$select=="yes"), aes(xmin=g_start,xmax=g_end,ymin=5,ymax=10, fill=cqlabel_Fam18))+
+  #scale_color_manual(values=group.colors)+
+  facet_grid(scaffold~.)+
+  theme_bw()
+
+#families lenght sizes
+>rnd-6_family-6261  (411 bp)
+>rnd-6_family-1433 (5095 bp)
+>rnd-1_family-99 (6305 bp)
+>rnd-4_family-524 ( 4544 bp)
+
+[1] "qseqid"      "scaffold"    "pident"      "length"      "sstart"      "send"       
+[7] "select"      "select_kmer" "kmerid"      "num2"  
+
+#Split files by family
+data8<-subset(data3, data3$qseqid=="rnd-6_family-6261")
+data9<-subset(data3, data3$qseqid=="rnd-6_family-1433")
+data10<-subset(data3, data3$qseqid=="rnd-1_family-99")
+data11<-subset(data3, data3$qseqid=="rnd-4_family-524")
+
+#Calculate coverage of aligment using the total lenght of each sequence of the family
+data8 <- mutate(data8, coverage = data8$length*100/438)
+data9 <- mutate(data9, coverage = data9$length*100/5129)
+data10 <- mutate(data10, coverage = data10$length*100/6368)
+data11 <- mutate(data11, coverage = data11$length*100/4553)
+
+#Merge files
+data12<-union(data8, data9)
+data12<-union(data12, data10)
+data12<-union(data12, data11)
+
+#Calculate coverage of aligment using the total lenght of each sequence of the kmers
+data13<-mutate(data2, coverage = data2$length*100/25)
+
+#Merge Kmers and Familes
+data14<-union(data12, data13)
+data15<-subset(data14, data14$Rep.element=="Gypsy" | data14$Rep.element=="Tandem")
+
+ggplot()+
+  geom_rect(data=scaffold_6,aes(xmin=0,xmax=end,ymin=0,ymax=7),color="black",fill="white",size=0.4)+
+#  geom_jitter(data=subset(data14, data14$coverage>=50 & data14$pident>=95), aes(x=sstart,y=num2, color=select_kmer),alpha=0.9,size=1, na.rm = FALSE)+
+#  geom_jitter(data=subset(data14, data14$coverage>=50 & data14$pident>=95), aes(x=sstart,y=3, color=Rep.element),alpha=0.9,size=1, na.rm = FALSE)+
+  geom_jitter(data=subset(data15, data15$coverage>=50 & data15$pident>=95), aes(x=sstart,y=3, color=Rep.element),alpha=0.9,size=1, na.rm = FALSE)+
+  #geom_point(data=moy_coord, aes(x=g_start, y=3),fill="chocolate4",color="black",size=5,shape=21)+
+  #geom_rect(data=subset(my_data, my_data$select=="yes"), aes(xmin=g_start,xmax=g_end,ymin=5,ymax=10, fill=cqlabel_Fam18))+
+  #scale_color_manual(values=group.colors3)+
+  facet_grid(scaffold~.)+
+  theme_bw()
+
+#Add column specify kmers + families
+data14$Rep.element[data14$num2==1]<-"K_mers_1"
+data14$Rep.element[data14$num2==2]<-"K_mers_2"
+data14$Rep.element[data14$num2==3]<-"Gypsy"
+data14$Rep.element[data14$num2==4]<-"Gypsy"
+data14$Rep.element[data14$num2==5]<-"Gypsy"
+data14$Rep.element[data14$num2==6]<-"Tandem"
+
+group.colors6 <- c(K_mers_1 = "orange", K_mers_2 = "deeppink3",  Tandem = "forestgreen", Gypsy = "gray")
+
+
+write.table(data14, file = "data14.txt")
+
+#Edit data14 in excel for identity and coverage, fix coordiated (End has to be bigger than start)
+kmer_families_50cov_90ident <- read.delim("~/Documents/X-genes-Ccap/Annotation_CCap3.2/K-mers/Blast/Blast_K-mers/kmer_families_50cov_90ident.txt", stringsAsFactors=FALSE)
+kmer_families_50cov_90ident$Rep.element[kmer_families_50cov_90ident$num2==1]<-"K_mers_1"
+kmer_families_50cov_90ident$Rep.element[kmer_families_50cov_90ident$num2==2]<-"K_mers_2"
+kmer_families_50cov_90ident$Rep.element[kmer_families_50cov_90ident$num2==3]<-"Gypsy"
+kmer_families_50cov_90ident$Rep.element[kmer_families_50cov_90ident$num2==4]<-"Gypsy"
+kmer_families_50cov_90ident$Rep.element[kmer_families_50cov_90ident$num2==5]<-"Gypsy"
+kmer_families_50cov_90ident$Rep.element[kmer_families_50cov_90ident$num2==6]<-"Tandem"
+
+write.table(kmer_families_50cov_90ident, file ="kmer_families_50cov_90ident")
+
+ggplot()+
+geom_rect(data=scaffold_6,aes(xmin=0, xmax=end, ymin=0, ymax=3),color="black",fill="white",size=0.4)+
+geom_rect(data=subset(data14, data14$select=="yes"), 
+          aes(xmin=sstart,xmax=send+10000, ymin=0,ymax=3,fill=Rep.element))+ 
+    facet_grid(scaffold~.)+
+scale_fill_manual(values=group.colors6)+
+  theme_classic(base_size=15)+
+  theme(axis.title.y=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank(),
+        legend.position="top",
+        panel.spacing.y =unit(.05, "lines"),
+        strip.background = element_rect(size=0.2),
+        strip.text.y = element_text(size=10),
+        axis.line = element_blank())
+  #scale_x_continuous(name="Position in Mbp"#labels=c(0,2,4,6))
+ggsave("[path/to/file]/Figure1.png",width=8, height=5)
+
+group.colors6 <- c(K_mers_1 = "orange", K_mers_2 = "deeppink3",  Tandem = "forestgreen", Gypsy = "gray")
+
+
+group.colors5 <- c(K_mers = "pink", Tandem = "green", Gypsy = "yellow", gypsy_99 = "royalblue", gypsy_1433 = "deeppink", TR_fam = "forestgreen", gypsy_524 = "brown", kmer_343044347 = "red",kmer_26033678 = "orange")
+
+
+write.table(data6, file="data6.txt")

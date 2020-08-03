@@ -1,0 +1,16 @@
+name_sel	Kmer_id	Name_id	Transgenic_Parent	chromosome	start	old_name	new_name
+Cas9.1	Kmer1	Cas9.Kmer1a	F	NA	NA	1F	1a
+Cas9.1	Kmer1	Cas9.Kmer1b	F	5	31827778	2F	1b
+Cas9.1	Kmer1	Cas9.Kmer1c	F	1	2780832	3F	1c
+Cas9.1	Kmer1	Cas9.Kmer1d	M	6	45939184	1M	1d
+Cas9.1	Kmer1	Cas9.Kmer1e	M	4	25561321	2M	1e
+Cas9.1	Kmer1	Cas9.Kmer1f	M	4	58949141	3M	1f
+Cas9.1	Kmer1	Cas9.Kmer1g	M	NA	NA	5M	1g
+Cas9.2	Kmer2	Cas9.Kmer2a	(4Mand4F)	2	78745789	Legolas	2a
+Cas9.2	Kmer2	Cas9.Kmer2b	F	2	16554608	3F	2b
+Cas9.2	Kmer2	Cas9.Kmer2c	2F	2	19290016	6F	2c
+Cas9.2	Kmer2	Cas9.Kmer2d	F	2	70687722	7F	2d
+we	we	whiteeye		5	5366940	we	we
+Cas9_we	cas9white	Cas9white	pool	2	11598327	cas9white	Cas9.w
+Cas12a_we	Cas12a.white	Cas12a.white	F	NA	NA	Cas12a.white	Cas12a.white
+Cas12a_1_2_we	Cas12a.multiplex	Cas12a.multiplex	pool	NA	NA	Cas12a.multiplex	Cas12a.multiplex

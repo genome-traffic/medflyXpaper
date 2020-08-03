@@ -1,0 +1,16 @@
+ggplot()+
+  geom_rect(data=scaffold_6,aes(xmin=0,xmax=end,ymin=0,ymax=3),color="black",fill="white",size=0.4)+
+  geom_jitter(data=data2, aes(x=sstart,y=num2, color=select_kmer),alpha=0.7,size=1.8)+
+  scale_color_manual(values=group.colors7)+
+  facet_grid(scaffold~.)+
+  theme_classic(base_size=15)+
+  theme(axis.title.y=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank(),
+        legend.position="top",
+        panel.spacing.y =unit(.05, "lines"),
+        strip.background = element_rect(size=0.2),
+        strip.text.y = element_text(size=10),
+        axis.line = element_blank())
+
+group.colors7 <- c(kmer_343044347 = "orange",kmer_26033678 = "deeppink3")

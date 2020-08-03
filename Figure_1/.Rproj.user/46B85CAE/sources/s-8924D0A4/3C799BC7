@@ -1,0 +1,22 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1587060563249.000,
+    "dirty" : true,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "3C799BC7",
+    "lastKnownWriteTime" : 1587059534,
+    "last_content_update" : 1587111721550,
+    "path" : "~/HUJI Drive/Projects/X-shredders/Manuscripts/Mecariello/Plotting_Figure_1/Figure1.R",
+    "project_path" : "Figure1.R",
+    "properties" : {
+        "cursorPosition" : "336,0",
+        "scrollLine" : "320"
+    },
+    "relative_order" : 4,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

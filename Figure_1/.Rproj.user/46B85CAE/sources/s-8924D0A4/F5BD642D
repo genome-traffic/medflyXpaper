@@ -1,0 +1,29 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1587065243371.000,
+    "dirty" : false,
+    "encoding" : "",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "F5BD642D",
+    "lastKnownWriteTime" : 8461807734393808128,
+    "last_content_update" : 1587065243371,
+    "path" : null,
+    "project_path" : null,
+    "properties" : {
+        "cacheKey" : "7CCB6136",
+        "caption" : "kmersc5",
+        "contentUrl" : "grid_resource/gridviewer.html?env=&obj=kmersc5&cache_key=7CCB6136",
+        "displayedObservations" : 485334,
+        "environment" : "",
+        "object" : "kmersc5",
+        "preview" : 0,
+        "totalObservations" : 485334,
+        "variables" : 76
+    },
+    "relative_order" : 5,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_dataframe"
+}

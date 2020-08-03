@@ -1,0 +1,368 @@
+if (!require(ggplot2)) install.packages('ggplot2')
+library(ggplot2)
+if (!require(data.table)) install.packages('data.table')
+library(data.table)
+if (!require(RColorBrewer)) install.packages('RColorBrewer')
+library(RColorBrewer)
+if (!require(dplyr)) install.packages('dplyr')
+library(dplyr)
+if (!require(ggrepel)) install.packages('ggrepel')
+library(ggrepel)
+
+##Set wd based on source
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+getwd()
+# Data_wrangling ----------------------------------------------------------
+
+#bring in kmers from redkmer
+  kmers<-read.table("input_data/redkmer_output.txt", header=T, sep="\t")
+#bring in Cas9 and CPF1 enginnerability
+  cas<-read.table("input_data/cas9.output.scored", header=T, sep="\t", row.names=NULL)
+  cpf<-read.table("input_data/cpf1.output.scored", header=T, sep="\t")
+#Combine Cas9 and CPF1 enginnerability into variable targetable
+  target<-merge(cas,cpf,by="kmer_id",all=TRUE)
+  v<-merge(kmers,target,by="kmer_id",all=TRUE)
+  v$cas<-0
+  v$cpf<-0
+  v <- within(v,
+              cas <- ifelse(!is.na(otCount.x), 1, 0))
+  v <- within(v,
+              cpf <- ifelse(!is.na(otCount.y), 2,0))
+  v$targetable<-v$cpf+v$cas
+  v$targetable[v$targetable==0]<-"none"
+  v$targetable[v$targetable==1]<-"Cas9"
+  v$targetable[v$targetable==2]<-"CPF1"
+  v$targetable[v$targetable==3]<-"Cas9 & CPF1"
+  v$targetable<-as.factor(v$targetable)
+  summary(v$targetable)
+  dim(subset(v,v$targetable!="none"))
+
+#bring in which kmers belong to which Contigs
+  contigs2kmers<-read.table("input_data/contigs2kmers.txt", header=T, sep="\t")
+
+# merge contig information
+  kmersc<-merge(v, contigs2kmers, by="kmer_id",all=TRUE)
+
+# get coverage data per contig based on summing kmers sum and hits_sum 
+  contigcounts<-kmersc[,c("kmer_id","sum","hits_sum","Contig")]
+  unique_contigcounts<-contigcounts[!duplicated(contigcounts),]
+  sum<-aggregate(unique_contigcounts$sum, by=list(Contig=unique_contigcounts$Contig), FUN=sum)
+  hitssum<-aggregate(unique_contigcounts$hits_sum, by=list(Contig=unique_contigcounts$Contig), FUN=sum)
+  contigcounts<-merge(sum, hitssum, by="Contig",all=TRUE)
+  colnames(contigcounts)<-c("Contig","total_sum","total_hits_sum")
+  kmersc<-merge(kmersc, contigcounts, by="Contig",all=TRUE)
+  names(kmersc)
+  kmersc<-kmersc[,c("kmer_id","seq","female","male","CQ","sum","hits_X","hits_A","hits_Y","hits_GA","hits_sum","perchitsX","hits_threshold","sum_offtargets","offtargets","degen_targets","candidate","log10sum","label","selection","start.x","stop.x","target.x","context.x","overflow.x","orientation.x","Doench2014OnTarget","Doench2016CDFScore","dangerous_GC.x","dangerous_polyT.x","dangerous_in_genome.x","Hsu2013","otCount.x","start.y","stop.y","target.y","context.y","overflow.y","orientation.y","dangerous_GC.y","dangerous_polyT.y","dangerous_in_genome.y","otCount.y","cas","cpf","targetable","Contig","total_sum","total_hits_sum")]
+
+#bring in and merge kmers to bins blast at 100percent identity
+  kmercounts<-read.table("input_data/kmers2Xbin.count", header=F, sep="\t")
+  colnames(kmercounts)<-c("kmer_id","PBread","hits_per_read")
+#process to get the top number of hits a kmer has on a pacBio read and create variable max.pt
+  d<-kmercounts
+  d$PBread<-NULL
+  q<-d[order(d$kmer_id),]
+  e<-group_by(q,kmer_id)
+  a<-summarize(e, max.pt = max(hits_per_read))
+#merge max.pt data into the kmers file
+  kmersc<-merge(kmersc, a, by="kmer_id",all=TRUE)
+#calculate the total number of unique reads a kmer occurs
+  x<-as.data.frame(table(kmercounts$kmer_id))
+  colnames(x)<-c("kmer_id","Unique_bin_Occurence")
+#merge Unique_bin_Occurence data into the kmers file
+  kmersc<-merge(kmersc, x, by="kmer_id",all=TRUE)
+
+
+#bring in and merge blast against ceratitis genome (new version from alistair 3.2)
+  blast<-read.table("input_data/kmers2CCAP3.2.blast2", header=T, sep="\t")
+  kmersc<-merge(kmersc, blast, by="kmer_id",all=TRUE)
+#bring in and merge number of hits to genome file creating the variable hits2genome
+  counts<-read.table("input_data/kmers2CCAP3.2.count", header=T, sep="\t")
+  kmersc<-merge(kmersc, counts, by="kmer_id",all=TRUE)
+  kmersc$Unique_bin_Occurence[is.na(kmersc$Unique_bin_Occurence)] <- 0
+  kmersc$max.pt[is.na(kmersc$max.pt)] <- 0
+  kmersc$hits2genome[is.na(kmersc$hits2genome)] <- 0
+
+#bring in genome coordinates file
+  coordinates<-read.table("input_data/coordinates", header=T, sep="\t")
+
+# selecting kmers that fit mutliple top layers
+  kmersc$hits_sum_lab2<-0
+  kmersc$hits_sum_lab2[kmersc$hits_sum > quantile(kmersc$hits_sum, 0.99)]<-1
+  summary(kmersc$hits_sum_lab2)
+  kmersc$log10sum_lab2<-0
+  kmersc$log10sum_lab2[kmersc$log10sum > quantile(kmersc$log10sum, 0.99)]<-1
+  summary(kmersc$log10sum_lab2)
+  kmersc$max.pt_lab2<-0
+  kmersc$max.pt_lab2[kmersc$max.pt > quantile(kmersc$max.pt, 0.99)]<-1
+  summary(kmersc$max.pt_lab2)
+  kmersc$unique_lab2<-0
+  kmersc$unique_lab2[kmersc$Unique_bin_Occurence > quantile(kmersc$Unique_bin_Occurence, 0.99)]<-1
+  summary(kmersc$unique_lab2)
+  kmersc$target_lab2<-0
+  kmersc$target_lab2[kmersc$targetable!= "none"]<-10
+  summary(kmersc$target_lab2)
+  kmersc$labs2<-kmersc$hits_sum_lab2 + kmersc$log10sum_lab2 + kmersc$max.pt_lab2 + kmersc$unique_lab2 + kmersc$target_lab2
+  summary(kmersc$labs2)
+
+# naming layers
+
+  kmersc$hits_sum_lab<-0
+  kmersc$hits_sum_lab[kmersc$hits_sum > quantile(kmersc$hits_sum, 0.99)]<-0.1
+  kmersc$log10sum_lab<-0
+  kmersc$log10sum_lab[kmersc$log10sum > quantile(kmersc$log10sum, 0.99)]<-0.01
+  kmersc$max.pt_lab<-0
+  kmersc$max.pt_lab[kmersc$max.pt > quantile(kmersc$max.pt, 0.99)]<-0.001
+  kmersc$unique_lab<-0
+  kmersc$unique_lab[kmersc$Unique_bin_Occurence > quantile(kmersc$Unique_bin_Occurence, 0.99)]<-0.0001
+  
+  kmersc$labs<-kmersc$hits_sum_lab + kmersc$log10sum_lab + kmersc$max.pt_lab + kmersc$unique_lab
+  kmersc$labs[kmersc$labs == 0]<-"no"
+  kmersc$labs[kmersc$labs == 0.1]<-"hits_sum"
+  kmersc$labs[kmersc$labs == 0.01]<-"sum"
+  kmersc$labs[kmersc$labs == 0.001]<-"max.pt"
+  kmersc$labs[kmersc$labs == 0.0001]<-"Unique_bin_Occurence"
+  kmersc$labs[kmersc$labs == 0.11]<-"hits_sum&sum"
+  kmersc$labs[kmersc$labs == 0.111]<-"hits_sum&sum&max.pt"
+  kmersc$labs[kmersc$labs == 0.1111]<-"hits_sum&sum&max.pt&Unique_bin_Occurence"
+  kmersc$labs[kmersc$labs == 0.011]<-"sum&max.pt"
+  kmersc$labs[kmersc$labs == 0.0111]<-"sum&max.pt&Unique_bin_Occurence"
+  kmersc$labs[kmersc$labs == 0.1001]<-"hits_sum&Unique_bin_Occurence"
+  kmersc$labs[kmersc$labs == 0.101]<-"hits_sum&max.pt"
+  kmersc$labs[kmersc$labs == 0.1011]<-"hits_sum&max.pt&Unique_bin_Occurence"
+  kmersc$labs[kmersc$labs == 0.1101]<-"hits_sum&sum&Unique_bin_Occurence"
+  kmersc$labs[kmersc$labs2<=11]<-"all_others"
+  kmersc$labs<-as.factor(kmersc$labs)
+  
+
+
+# cutoff data and print
+  dir.create("output_data/")
+  dim(as.data.frame(unique(kmersc$kmer_id[kmersc$labs2>11])))
+  names(kmersc)
+  kmersc1<-kmersc[,c("kmer_id","seq","female","male","CQ","sum","hits_X","hits_A","hits_Y","hits_GA","hits_sum","perchitsX","hits_threshold","sum_offtargets","offtargets","degen_targets","candidate","log10sum","label","selection","Hsu2013","otCount.x","otCount.y","targetable","Contig","total_sum","total_hits_sum","max.pt","Unique_bin_Occurence","hits2genome","hits_sum_lab2","log10sum_lab2","max.pt_lab2","unique_lab2","target_lab2","labs2","hits_sum_lab","log10sum_lab","max.pt_lab","unique_lab","labs")]
+  kmersc1<-kmersc1[!duplicated(kmersc1),]
+  kmersc2<-subset(kmersc1,kmersc1$labs2>11)
+  kmersc2<-kmersc2[!duplicated(kmersc2),]
+  write.table(kmersc2,file="output_data/topkmer.csv",sep="\t",quote=FALSE,row.names = FALSE)
+  dim(as.data.frame(unique(kmersc1$kmer_id[kmersc1$labs2>11])))
+  final<-merge(kmersc2,kmersc,by="kmer_id",all=FALSE)
+  write.table(final,file="output_data/final.txt",sep="\t",quote=FALSE)
+  f<-kmersc2[,c("kmer_id","seq")]
+  topkmers<-as.data.frame(unique(f))
+#top kmer table
+  write.table(topkmers, file= "output_data/topkmer.table",sep="\t",quote = FALSE, row.names = FALSE)
+
+  
+  contigcq<-read.table("input_data/cq_contigs_coord_10.txt", header=T, sep="\t", row.names=NULL)
+  contigcq$c.label<-as.factor(contigcq$c.label)
+  contigcq$cq.label[contigcq$cq_contig<=0.2]<-"Y"
+  contigcq$cq.label[contigcq$cq_contig>=0.2]<-"A"
+  contigcq$cq.label[contigcq$cq_contig>=1.5]<-"X"
+  contigcq$cq.label[contigcq$cq_contig>=4]<-"GA"
+  
+
+# Selecting kmers for use and plotting ------------------------------------
+
+
+##Plotting
+  
+## Select top kmers to be used
+  kmersc1$name_sel<-"all_others"
+  kmersc1$name_sel[kmersc1$labs != "all_others"]<-"top"
+  kmersc1$name_sel[grep("kmer_26033678.0", kmersc1$kmer_id)]<-"Cas9.2"
+  kmersc1$name_sel[grep("kmer_343044347.0", kmersc1$kmer_id)]<-"Cas9.1"
+  kmersc1$name_sel[grep("kmer_114612537.0", kmersc1$kmer_id)]<-"Cas12a.1"
+  kmersc1$name_sel[grep("kmer_276121958.0", kmersc1$kmer_id)]<-"Cas12a.2"
+  kmersc1$name_sel<-as.factor(kmersc1$name_sel)
+  levels(kmersc1$name_sel)
+  
+  kmersc$name_sel<-"all_others"
+  kmersc$name_sel[kmersc$labs != "all_others"]<-"top"
+  kmersc$name_sel[grep("kmer_26033678.0", kmersc$kmer_id)]<-"Cas9.2"
+  kmersc$name_sel[grep("kmer_343044347.0", kmersc$kmer_id)]<-"Cas9.1"
+  kmersc$name_sel[grep("kmer_114612537.0", kmersc$kmer_id)]<-"Cas12a.1"
+  kmersc$name_sel[grep("kmer_276121958.0", kmersc$kmer_id)]<-"Cas12a.2"
+  kmersc$name_sel<-as.factor(kmersc$name_sel)
+  levels(kmersc$name_sel)
+
+
+  
+#####  
+  ###Subset and show only top 6 largest contigs
+  kmersc5<-subset(kmersc, kmersc$chromosome<7)
+  summary(kmersc5$chromosome)
+  kmersc5$chromosome<-as.factor(kmersc5$chromosome)
+  kmersc5<-subset(kmersc5, kmersc5$alignmentlength>23)
+  
+  kmersc6<-subset(kmersc5, kmersc5$identity<100)
+  kmersc6<-subset(kmersc6, kmersc6$alignmentlength>23)
+  kmersc5<-subset(kmersc5, kmersc5$identity>99)
+  kmersc5<-subset(kmersc5, kmersc5$alignmentlength>23)
+  
+  numbers:
+    #allkmers=5x10^8
+    #candidate=50624(candidateXkmers)=5x10^4
+    #targetable=16520
+  #   Cas9 Cas9 & CPF1        CPF1        none 
+  # 6914        1089        8517       37127 
+
+
+# plotting ----------------------------------------------------------------
+
+  ggplot()+
+    geom_point(data=subset(kmersc1,kmersc1$name_sel=="all_others"),aes(x=log10sum,y=log10(hits_sum)),color="grey",alpha=1, size=2)+
+    geom_point(data=subset(kmersc1,kmersc1$targetable!="none"),aes(x=log10sum,y=log10(hits_sum)),shape=21,color="black",alpha=0.2, size=1.8)+
+    geom_point(data=subset(kmersc1,kmersc1$name_sel=="top"),aes(x=log10sum,y=log10(hits_sum)),shape=21,color="black",fill="pink",alpha=1, size=3)+
+    geom_point(data=subset(kmersc1,kmersc1$name_sel!="all_others" & kmersc1$name_sel!="top"),aes(x=log10sum,y=log10(hits_sum),fill=name_sel),shape=21,color="black",alpha=1, size=5)+
+    theme_bw(base_size=15)+
+    guides(color = guide_legend(override.aes = list(size=5,alpha=1)))+
+    scale_y_continuous(name = "log10(Hits_Sum)")+
+    scale_x_continuous(name = "log10(Sum)")+
+    scale_fill_brewer(palette="Set1")+
+    ggsave("output_data/plotA.png",width=6, height=5)
+  
+  
+  ggplot()+
+    geom_density(data=subset(kmersc1,kmersc1$name_sel=="all_others"),aes(x=(CQ)),fill="grey",alpha=0.7)+
+    geom_jitter(data=subset(kmersc1,kmersc1$name_sel=="all_others"),aes(x=(CQ),y=-0.5),color="grey",alpha=0.4, size=1)+
+    geom_jitter(data=subset(kmersc1,kmersc1$targetable!="none"),aes(x=(CQ),y=-0.5),shape=21,color="black",alpha=0.2, size=0.8)+
+    geom_point(data=subset(kmersc1,kmersc1$name_sel=="top"),aes(x=(CQ),y=-0.65),,shape=21,color="black",fill="pink",alpha=1, size=3)+
+    geom_point(data=subset(kmersc1,kmersc1$name_sel!="all_others" & kmersc1$name_sel!="top"),aes(x=(CQ),y=-0.35,fill=name_sel),shape=21,color="black",alpha=1, size=5)+
+    theme_bw(base_size=15)+
+    guides(color = guide_legend(override.aes = list(size=5,alpha=1)))+
+    scale_x_continuous(name = "CQ")+
+    scale_fill_brewer(palette="Set1")+
+    ylim(-1,5)
+  ggsave("output_data/plotB.png",width=6, height=5)
+  
+  ggplot()+
+    geom_vline(xintercept =log10(quantile(kmersc$hits_sum, 0.99)),size=0.2)+
+    geom_density(data=subset(kmersc1,kmersc1$name_sel=="all_others"),aes(x=log10(hits_sum)),fill="grey",alpha=0.7)+
+    geom_jitter(data=subset(kmersc1,kmersc1$name_sel=="all_others"),aes(x=log10(hits_sum),y=-0.5),color="grey",alpha=0.4, size=1)+
+    geom_jitter(data=subset(kmersc1,kmersc1$targetable!="none"),aes(x=log10(hits_sum),y=-0.5),shape=21,color="black",alpha=0.4, size=0.8)+
+    geom_point(data=subset(kmersc1,kmersc1$name_sel=="top"),aes(x=log10(hits_sum),y=-0.65),,shape=21,color="black",fill="pink",alpha=1, size=3)+
+    geom_point(data=subset(kmersc1,kmersc1$name_sel!="all_others" & kmersc1$name_sel!="top"),aes(x=log10(hits_sum),y=-0.35,fill=name_sel),shape=21,color="black",alpha=1, size=5)+
+    theme_bw(base_size=15)+
+    guides(color = guide_legend(override.aes = list(size=5,alpha=1)))+
+    scale_x_continuous(name = "log10(hits_sum)")+
+    scale_fill_brewer(palette="Set1")+
+    ylim(-1,5)
+  ggsave("output_data/plotC.png",width=6, height=5)
+  
+  ggplot()+
+    geom_vline(xintercept =log10(quantile(kmersc$sum, 0.99)),size=0.2)+
+    geom_density(data=subset(kmersc1,kmersc1$name_sel=="all_others"),aes(x=log10(sum)),fill="grey",alpha=0.7)+
+    geom_jitter(data=subset(kmersc1,kmersc1$name_sel=="all_others"),aes(x=log10(sum),y=-0.5),color="grey",alpha=0.4, size=1)+
+    geom_jitter(data=subset(kmersc1,kmersc1$targetable!="none"),aes(x=log10(sum),y=-0.5),shape=21,color="black",alpha=0.4, size=0.8)+
+    geom_point(data=subset(kmersc1,kmersc1$name_sel=="top"),aes(x=log10(sum),y=-0.65),,shape=21,color="black",fill="pink",alpha=1, size=3)+
+    geom_point(data=subset(kmersc1,kmersc1$name_sel!="all_others" & kmersc1$name_sel!="top"),aes(x=log10(sum),y=-0.35,fill=name_sel),shape=21,color="black",alpha=1, size=5)+
+    theme_bw(base_size=15)+
+    guides(color = guide_legend(override.aes = list(size=5,alpha=1)))+
+    scale_x_continuous(name = "log10(sum)")+
+    scale_fill_brewer(palette="Set1")+
+    ylim(-1,5)+
+    ggsave("output_data/plotD.png",width=6, height=5)
+  
+  
+  ggplot()+
+    geom_vline(xintercept =log10(quantile(kmersc$max.pt, 0.99)),size=0.2)+
+    geom_density(data=subset(kmersc1,kmersc1$name_sel=="all_others"),aes(x=log10(max.pt)),fill="grey",alpha=0.7)+
+    geom_jitter(data=subset(kmersc1,kmersc1$name_sel=="all_others"),aes(x=log10(max.pt),y=-0.5),color="grey",alpha=0.4, size=1)+
+    geom_jitter(data=subset(kmersc1,kmersc1$targetable!="none"),aes(x=log10(max.pt),y=-0.5),shape=21,color="black",alpha=0.4, size=0.8)+
+    geom_point(data=subset(kmersc1,kmersc1$name_sel=="top"),aes(x=log10(max.pt),y=-0.65),,shape=21,color="black",fill="pink",alpha=1, size=3)+
+    geom_point(data=subset(kmersc1,kmersc1$name_sel!="all_others" & kmersc1$name_sel!="top"),aes(x=log10(max.pt),y=-0.35,fill=name_sel),shape=21,color="black",alpha=1, size=5)+
+    theme_bw(base_size=15)+
+    guides(color = guide_legend(override.aes = list(size=5,alpha=1)))+
+    scale_x_continuous(name = "log10(max.pt)")+
+    scale_fill_brewer(palette="Set1")+
+    ylim(-1,5)+
+    ggsave("output_data/plotE.png",width=6, height=5)
+  
+  ggplot()+
+    geom_vline(xintercept =log10(quantile(kmersc$Unique_bin_Occurence, 0.99)),size=0.2)+
+    geom_density(data=subset(kmersc1,kmersc1$name_sel=="all_others"),aes(x=log10(Unique_bin_Occurence)),fill="grey",alpha=0.7)+
+    geom_jitter(data=subset(kmersc1,kmersc1$name_sel=="all_others"),aes(x=log10(Unique_bin_Occurence),y=-0.5),color="grey",alpha=0.4, size=1)+
+    geom_jitter(data=subset(kmersc1,kmersc1$targetable!="none"),aes(x=log10(Unique_bin_Occurence),y=-0.5),shape=21,color="black",alpha=0.4, size=0.8)+
+    geom_point(data=subset(kmersc1,kmersc1$name_sel=="top"),aes(x=log10(Unique_bin_Occurence),y=-0.65),,shape=21,color="black",fill="pink",alpha=1, size=3)+
+    geom_point(data=subset(kmersc1,kmersc1$name_sel!="all_others" & kmersc1$name_sel!="top"),aes(x=log10(Unique_bin_Occurence),y=-0.35,fill=name_sel),shape=21,color="black",alpha=1, size=5)+
+    theme_bw(base_size=15)+
+    guides(color = guide_legend(override.aes = list(size=5,alpha=1)))+
+    scale_x_continuous(name = "log10(Unique_bin_Occurence)")+
+    scale_fill_brewer(palette="Set1")+
+    ylim(-1,5)
+  ggsave("output_data/plotF.png",width=6, height=5)
+  
+
+  ggplot()+
+    geom_rect(data=coordinates,aes(xmin=start, xmax=end, ymin=0, ymax=8),color="black",fill="white",size=0.4)+
+    geom_jitter(data=subset(kmersc5,kmersc5$name_sel=="all_others"),aes(x=s.start,y=2),color="grey",alpha=0.2, size=1)+
+    geom_jitter(data=subset(kmersc5,kmersc5$name_sel=="top"),aes(x=s.start,y=2),shape=21, fill="pink",color="black",alpha=0.8, size=3)+
+    geom_jitter(data=subset(kmersc5,kmersc5$name_sel!="all_others" & kmersc5$name_sel!="top"),aes(x=s.start,y=5,fill=name_sel),shape=21,color="black",alpha=0.8, size=3)+
+    geom_jitter(data=subset(kmersc6,kmersc6$name_sel!="all_others" & kmersc5$name_sel!="top"),aes(x=s.start,y=5,fill=name_sel),shape=22,color="black",alpha=0.7, size=2)+
+    facet_grid(chromosome~.)+
+    guides(color = guide_legend(override.aes = list(size=5,alpha=1)))+
+    theme_classic(base_size=15)+
+    theme(axis.title.y=element_blank(),
+          axis.text.y=element_blank(),
+          axis.ticks.y=element_blank(),
+          legend.position="top",
+          panel.spacing.y =unit(.05, "lines"),
+          strip.background = element_rect(size=0.2),
+          strip.text.y = element_text(size=5),
+          axis.line = element_blank())+
+    scale_fill_brewer(palette="Set1")
+  ggsave("output_data/plotG.png",width=5, height=4)
+ 
+
+  
+group.colors <- c(all_others = "grey", top = "pink", Cas9.1 = "green4", Cas9.2 = "magenta4", Cas12a.1 = "red",Cas12a.2 = "royalblue3")
+  
+  ggplot()+
+    geom_bar(data=kmersc5,aes(x=chromosome, y=..count.., fill=name_sel),color="black")+
+    facet_wrap(~name_sel,scales="free_y")+
+    scale_fill_manual(values=group.colors)+
+    theme_bw(base_size=15)
+  ggsave("output_data/plotH.png",width=7, height=4)
+  
+  ggplot()+
+    geom_jitter(data=subset(kmersc5,kmersc5$name_sel=="top") ,aes(x=(offtargets), y=(degen_targets), fill=name_sel),shape=21, color="black",size=3)+
+    geom_point(data=subset(kmersc5,kmersc5$name_sel!="all_others" & kmersc5$name_sel!="top") ,aes(x=(offtargets), y=(degen_targets), fill=name_sel),shape=21, color="black",size=5)+
+    #  facet_wrap(~name_sel,scales="free_y")+
+    scale_fill_manual(values=group.colors)+
+    theme_bw(base_size=15)
+    ggsave("output_data/plotI.png",width=5, height=5)
+  
+     
+  ### genome plot with cq of contigs  
+    
+    group.colors3 <- c(A = "springgreen4", X = "red2",Y="dodgerblue2",GA="white",all_others="grey",top="pink",Cas9.1 = "green4", Cas9.2 = "magenta4", Cas12a.1 = "red",Cas12a.2 = "royalblue3" )
+    ggplot()+
+      geom_rect(data=coordinates,aes(xmin=start, xmax=end, ymin=0, ymax=4),color="black",fill="white",size=0.4)+
+      geom_rect(data=contigcq,aes(xmin=c_start, xmax=c_end, ymin=3, ymax=4,fill=cq.label))+
+      geom_point(data=subset(kmersc5,kmersc5$name_sel=="all_others"),aes(x=s.start,y=1),color="grey",alpha=0.2, size=1)+
+      geom_point(data=subset(kmersc5,kmersc5$name_sel=="top"),aes(x=s.start,y=1),shape=21, fill="pink",color="black",alpha=0.8, size=3)+
+      geom_point(data=subset(kmersc5,kmersc5$name_sel!="all_others" & kmersc5$name_sel!="top"),aes(x=s.start,y=2,fill=name_sel),shape=21,color="black",alpha=0.8, size=3)+
+      geom_point(data=subset(kmersc6,kmersc6$name_sel!="all_others" & kmersc5$name_sel!="top"),aes(x=s.start,y=2,fill=name_sel),shape=22,color="black",alpha=0.7, size=2)+
+      facet_grid(chromosome~.)+
+      guides(color = guide_legend(override.aes = list(size=5,alpha=1)))+
+      theme_classic(base_size=15)+
+      theme(axis.title.y=element_blank(),
+            axis.text.y=element_blank(),
+            axis.ticks.y=element_blank(),
+            legend.position="top",
+            panel.spacing.y =unit(.05, "lines"),
+            strip.background = element_rect(size=0.2),
+            strip.text.y = element_text(size=5),
+            axis.line = element_blank())+
+      scale_fill_manual(values=group.colors3)
+    ggsave("output_data/CQ.png",width=4, height=4)
+# end ---------------------------------------------------------------------
+
+  
+  
+  
+#  add kmer2 mismatch
+  
+  
+  
+  
