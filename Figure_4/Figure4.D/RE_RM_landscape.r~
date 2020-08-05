@@ -1,0 +1,55 @@
+if (!require(data.table)) install.packages('data.table')
+library(data.table)
+if (!require(RColorBrewer)) install.packages('RColorBrewer')
+library(RColorBrewer)
+if (!require(dplyr)) install.packages('dplyr')
+library(dplyr)
+if (!require(ggrepel)) install.packages('ggrepel')
+library(ggrepel)
+if (!require(treemap)) install.packages('treemap')
+library(treemap)
+if (!require(treemapify)) install.packages('treemapify')
+ library(treemapify)
+if (!require(colorspace)) install.packages('colorspace')
+
+
+##Set wd based on source
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+getwd()
+dir.create("output_data/")
+
+#Loading the data files ----------------------------------------------------------------
+
+dfam<-read.table("input_file/dfam.txt", header=T, sep="")
+df_fam<-read.table("input_file/df_fam.txt", header=T, sep="")
+
+# Data_wrangling ----------------------------------------------------------
+#Add column with kmer_1 and kmer_2 info
+#df_fam$colors<-"not_kmer"
+#df_fam$colors[df_fam$family=="rnd-1_family-99"]<-"kmer_2"
+#df_fam$colors[df_fam$family=="rnd-5_family-507"]<-"kmer_2"
+#df_fam$colors[df_fam$family=="rnd-1_family-16"]<-"kmer_2"
+#df_fam$colors[df_fam$family=="rnd-1_family-275"]<-"kmer_2"
+#df_fam$colors[df_fam$family=="rnd-1_family-591"]<-"kmer_2"
+#df_fam$colors[df_fam$family=="rnd-1_family-224"]<-"kmer_2"
+#df_fam$colors[df_fam$family=="rnd-6_family-6261"]<-"kmer_1"
+#df_fam$colors[df_fam$family=="rnd-1_family-62"]<-"kmer_1"
+#df_fam$colors[df_fam$family=="rnd-1_family-57"]<-"kmer_1"
+#df_fam$colors[df_fam$family=="rnd-1_family-37"]<-"kmer_1"
+
+# Plotting ----------------------------------------------------------------
+
+group.colors <- c(kmer_1 = "green4", kmer_2 = "magenta4", not_kmer = "grey98")
+
+#Landscape
+ggplot(dfam, aes(area = fam_gen_perc_RM, fill = colors, label = repeatmasker_name,
+                   subgroup = repeatmasker_subtype)) +
+  geom_treemap() +
+  geom_treemap_subgroup_border() +
+  geom_treemap_subgroup_text(place = "left", grow = T, alpha = .3, colour =
+                              "Black", fontface = "italic", min.size = 0) +
+geom_treemap_text(colour = "black", place = "topleft", reflow = F)+
+  scale_colour_manual(values=group.colors) +
+  scale_fill_manual(values=group.colors) +
+  theme(legend.position = "bottom")
+  ggsave("output_data/kmer_res_lansdcape3.png",width=8, height=6)
