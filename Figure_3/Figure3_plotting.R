@@ -78,6 +78,7 @@ femaleC<-read.table("input_data/qRT_femaleC.txt", header=T, sep="\t")
 
 group_var <- rep(c('WT', 'Cas9.1e', 'Cas9.2a', 'Cas9.2b', 'Cas9.2c', 'Cas9.2d', 'Cas9.w'), each = 3)
 
+
 te <- pcr_analyze(testes,
                   group_var = group_var,
                   reference_gene = 'RpL19',
@@ -111,7 +112,7 @@ group.colors2 <- c(Cas9.w = "grey", Cas9.1e = "green4", Cas9.2a = "magenta4",Cas
 
 ggplot(data2, aes(x = tissue, y = relative_expression,fill=group)) +
   geom_bar(stat="identity",position="dodge",color="black")+
-  geom_errorbar(aes(ymin=lower, ymax=upper), width=.2, position=position_dodge(.9))+
+  #geom_errorbar(aes(ymin=lower, ymax=upper), width=.2, position=position_dodge(.9))+
   scale_fill_manual(values=group.colors2)+
   theme_bw(base_size=15)+
   coord_flip()
@@ -152,6 +153,32 @@ femaleC_t$tissue<-"femaleC"
 stats_data<-rbind(testes_t,ovary_t,maleC_t,femaleC_t)
 stats_data$sig<-"no"
 stats_data$sig[stats_data$p_value <= 0.05]<-"yes"
+
+
+## Stats to individual comparisons in testes
+
+testes<-read.table("input_data/qRT_testes.txt", header=T, sep="\t")
+testes$names <- rep(c('WT', 'Cas9.1e', 'Cas9.2a', 'Cas9.2b', 'Cas9.2c', 'Cas9.2d', 'Cas9.w'), each = 3)
+testes<-subset(testes,testes$name=="Cas9.1e" | testes$name=="Cas9.2a")
+group_var<-testes$names
+testes$names <- NULL
+
+tes1<-pcr_test(testes,
+               group_var = group_var,
+               reference_gene = 'RpL19',
+               reference_group = 'Cas9.2a',
+               test = 't.test')
+tes1$sig<-"no"
+tes1$sig[tes1$p_value <= 0.05]<-"yes"
+tes1
+
+te <- pcr_analyze(testes,
+                  group_var = group_var,
+                  reference_gene = 'RpL19',
+                  reference_group = 'Cas9.2a')
+te$tissue<-"testes"
+te
+
 
 
 # Panel E ----------------------------------------------------------
